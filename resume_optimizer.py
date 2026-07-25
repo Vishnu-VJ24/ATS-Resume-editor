@@ -211,11 +211,13 @@ Now rewrite the resume following the rules above. Return ONLY the complete LaTeX
 
 def _validate_latex(latex: str):
     """
-    Safety checks to ensure Gemini didn't break the resume structure.
-    Raises ValueError with a clear message on failure.
+    Surgically checks that Gemini preserved structural details and metrics.
+    Uses dynamic extraction from BASE_RESUME_LATEX so that updating
+    the resume on GitHub doesn't break validation.
     """
     errors = []
 
+    # 1. Basic LaTeX block checks
     if r"\begin{document}" not in latex:
         errors.append("Missing \\begin{document}")
     if r"\end{document}" not in latex:
@@ -223,42 +225,72 @@ def _validate_latex(latex: str):
     if r"\documentclass" not in latex:
         errors.append("Missing \\documentclass")
 
-    # Verify all original roles are still present (by company name)
-    expected_companies = ["Methix", "Purcell Global Limited", "Arizona State University"]
-    for company in expected_companies:
+    # 2. Dynamic structure verification
+    # Extract all \resumeExpHeading definitions
+    exp_headings = re.findall(
+        r'\\resumeExpHeading\s*\{([^{}]*)\}\s*\{([^{}]*)\}\s*\{([^{}]*)\}\s*\{([^{}]*)\}',
+        BASE_RESUME_LATEX,
+        re.DOTALL
+    )
+    for company, date, role, location in exp_headings:
+        company, date, role, location = company.strip(), date.strip(), role.strip(), location.strip()
+        # Verify these exist in the output (ignoring extra spaces/newlines)
         if company not in latex:
-            errors.append(f"Missing company/institution: {company}")
-
-    # Verify all original projects are still present
-    expected_projects = [
-        "Wildfire Prediction",
-        "Kafka and Neo4j",
-        "Automated Abstract Notes",
-    ]
-    for project in expected_projects:
-        if project not in latex:
-            errors.append(f"Missing project: {project}")
-
-    # Verify key dates are unchanged
-    expected_dates = [
-        "Aug 2024 -- May 2026",
-        "Aug 2020 -- May 2024",
-        "Jun 2025 -- Present",
-        "Aug 2025 -- Present",
-        "Jun 2025 -- Aug 2025",
-    ]
-    for date in expected_dates:
+            errors.append(f"Missing company: '{company}'")
         if date not in latex:
-            errors.append(f"Date altered or missing: {date}")
+            errors.append(f"Missing or altered date: '{date}'")
+        if role not in latex:
+            errors.append(f"Missing or altered role: '{role}'")
 
-    # Verify metrics are unchanged
-    expected_metrics = ["92\\%", "82\\%", "0.67 AUC", "40\\%", "2.3\\%", "14\\%", "80+", "470K", "1.5K"]
-    for metric in expected_metrics:
-        if metric not in latex:
-            # Try without backslash for percentage signs
-            alt_metric = metric.replace("\\%", "%")
-            if alt_metric not in latex:
-                errors.append(f"Metric altered or missing: {metric}")
+    # Extract all \resumeProjectHeading definitions
+    proj_headings = re.findall(
+        r'\\resumeProjectHeading\s*\{([^{}]*)\}\s*\{([^{}]*)\}',
+        BASE_RESUME_LATEX,
+        re.DOTALL
+    )
+    for project, link in proj_headings:
+        project, link = project.strip(), link.strip()
+        if project not in latex:
+            errors.append(f"Missing project: '{project}'")
+
+    # Extract all \resumeSubheading definitions (e.g., Education)
+    sub_headings = re.findall(
+        r'\\resumeSubheading\s*\{([^{}]*)\}\s*\{([^{}]*)\}\s*\{([^{}]*)\}\s*\{([^{}]*)\}',
+        BASE_RESUME_LATEX,
+        re.DOTALL
+    )
+    for school, date, degree, location in sub_headings:
+        school, date, degree, location = school.strip(), date.strip(), degree.strip(), location.strip()
+        if school not in latex:
+            errors.append(f"Missing institution: '{school}'")
+        if date not in latex:
+            errors.append(f"Missing date in education: '{date}'")
+        if degree not in latex:
+            errors.append(f"Missing degree: '{degree}'")
+
+    # 3. Dynamic metrics verification
+    # Find all percentages, metric terms, and specific quantities in BASE_RESUME_LATEX
+    metric_regexes = [
+        r'\b\d+(?:\.\d+)?\s*(?:\\%|%)',                               # 24%, 35%, 92%
+        r'\b\d+(?:\.\d+)?\s*(?:plus|GB|B|M|K|AUC|hours?)\b',          # 15GB, 1.5M, 80 plus
+        r'\b\d+(?:\.\d+)?-parameter\b',                               # 21B-parameter
+        r'\b\d+\.\d+\s*AUC\b',                                        # 0.88 AUC
+        r'\b\d+(?:\.\d+)?\s*plus\b'                                   # 5,000 plus
+    ]
+
+    extracted_metrics = set()
+    for pattern in metric_regexes:
+        matches = re.findall(pattern, BASE_RESUME_LATEX)
+        for m in matches:
+            # Normalize to compare without spacing and backslash issues
+            norm = m.replace("\\", "").replace(" ", "").lower()
+            extracted_metrics.add((m, norm))
+
+    for original_metric, normalized_metric in extracted_metrics:
+        # Check if normalized metric exists in the normalized output
+        normalized_output = latex.replace("\\", "").replace(" ", "").lower()
+        if normalized_metric not in normalized_output:
+            errors.append(f"Metric altered or missing: '{original_metric}'")
 
     if errors:
         raise ValueError(
