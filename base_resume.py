@@ -1,4 +1,4 @@
-\documentclass[letterpaper,10pt]{article}
+BASE_RESUME_LATEX = r"""\documentclass[letterpaper,10pt]{article}
  
 \usepackage[empty]{fullpage}
 \usepackage{titlesec}
@@ -150,4 +150,4 @@
     {Master of Science in Data Science, Analytics and Engineering}{Arizona, USA}
 \resumeSubHeadingListEnd
  
-\end{document}
+\end{document} """
