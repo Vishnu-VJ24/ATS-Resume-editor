@@ -7,6 +7,7 @@
 
 import re
 import streamlit as st
+from google.api_core.exceptions import ResourceExhausted
 from resume_optimizer import optimize_resume
 from latex_compiler import compile_latex
 from config import OWNER_NAME
@@ -162,7 +163,9 @@ if generate and job_description.strip():
             status.update(label=f"✅ PDF compiled: `{filename}`", state="complete")
 
         # ── SUCCESS ──────────────────────────
+        model_used = st.session_state.get("last_model_used", "unknown")
         st.success(f"✅ Resume optimized for **{role_name}** at **{company_name}**!")
+        st.caption(f"🤖 Model used: `{model_used}`")
 
         # Download button
         st.download_button(
@@ -208,6 +211,15 @@ if generate and job_description.strip():
     except ValueError as e:
         st.error(f"⚠️ Validation Error:\n\n{e}")
         st.info("The AI may have altered protected content. Try again — each run is independent.")
+
+    except ResourceExhausted as e:
+        st.error("🚫 All AI models are rate-limited for today.")
+        st.info(
+            "You've hit the daily free-tier limit on all fallback models. "
+            "Try again tomorrow, or add a paid Gemini API key in Streamlit secrets."
+        )
+        with st.expander("🔍 Error details"):
+            st.code(str(e))
 
     except RuntimeError as e:
         st.error(f"⚠️ PDF Compilation Error:\n\n{e}")
