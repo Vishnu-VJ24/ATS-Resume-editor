@@ -8,32 +8,32 @@
 
 import json
 import re
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from google.api_core.exceptions import ResourceExhausted, TooManyRequests
 import streamlit as st
 from config import GEMINI_MODELS, TEMPERATURE, MAX_OUTPUT_TOKENS
 from base_resume import BASE_RESUME_LATEX
 
 
-def _configure_api():
-    """Configure the Gemini API key from Streamlit secrets."""
-    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+def _get_client():
+    """Initialize the new Gemini client using the API key from Streamlit secrets."""
+    return genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
 
 
 def _call_with_fallback(generate_fn):
     """
-    Try generate_fn(model) with each model in GEMINI_MODELS until one succeeds.
+    Try generate_fn(client, model_name) with each model in GEMINI_MODELS until one succeeds.
     Falls back to the next model on 429 (rate limit) errors.
     Returns (response, model_name) on success.
     Raises the last error if ALL models are exhausted.
     """
-    _configure_api()
+    client = _get_client()
     last_error = None
 
     for model_name in GEMINI_MODELS:
         try:
-            model = genai.GenerativeModel(model_name)
-            response = generate_fn(model)
+            response = generate_fn(client, model_name)
             # Store which model was used (for UI feedback)
             st.session_state["last_model_used"] = model_name
             return response, model_name
@@ -88,17 +88,17 @@ def analyze_job_description(job_description: str) -> dict:
     Call 1: Extract structured ATS keywords from the job description.
     Returns a dict with role_name, company_name, skills, keywords, etc.
     """
-    def _generate(model):
-        return model.generate_content(
-            JD_ANALYSIS_PROMPT + job_description,
-            generation_config=genai.types.GenerationConfig(
+    def _generate(client, model_name):
+        return client.models.generate_content(
+            model=model_name,
+            contents=JD_ANALYSIS_PROMPT + job_description,
+            config=types.GenerateContentConfig(
                 temperature=0.2,  # Even more precise for extraction
                 max_output_tokens=4096,
             ),
         )
 
     response, _model_name = _call_with_fallback(_generate)
-
     raw = response.text.strip()
 
     # Strip markdown code fences if present
@@ -255,22 +255,24 @@ def rewrite_resume(jd_analysis: dict, job_description: str) -> str:
 
 Now rewrite the resume following the rules above. Return ONLY the complete LaTeX source code."""
 
-    def _generate(model):
-        return model.generate_content(
-            [
-                {"role": "user", "parts": [RESUME_REWRITE_SYSTEM_PROMPT]},
-                {"role": "model", "parts": ["Understood. I will surgically edit the resume LaTeX to maximize ATS match score while preserving all dates, names, metrics, and formatting. I will bold ONLY technical skills/tools/frameworks — never verbs or adjectives. I will use varied past-tense action verbs with no repeats within any role. I will return only raw LaTeX code."]},
-                {"role": "user", "parts": [user_prompt]},
+    def _generate(client, model_name):
+        return client.models.generate_content(
+            model=model_name,
+            contents=[
+                # System prompt is passed under system_instruction in GenerateContentConfig in new SDK,
+                # but for structured conversations, multi-turn messages can be used as contents as well.
+                # In the google-genai SDK, passing system instructions via system_instruction config
+                # is cleaner and more robust than manual turns.
+                types.Content(role="user", parts=[types.Part.from_text(user_prompt)])
             ],
-            generation_config=genai.types.GenerationConfig(
+            config=types.GenerateContentConfig(
                 temperature=TEMPERATURE,
                 max_output_tokens=MAX_OUTPUT_TOKENS,
-            ),
+                system_instruction=RESUME_REWRITE_SYSTEM_PROMPT
+            )
         )
 
     response, _model_name = _call_with_fallback(_generate)
-    )
-
     modified_latex = response.text.strip()
 
     # ── Post-processing ──────────────────────────
