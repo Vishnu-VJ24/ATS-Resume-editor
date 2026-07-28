@@ -37,12 +37,19 @@ def _call_with_fallback(generate_fn):
             st.session_state["last_model_used"] = model_name
             return response, model_name
         except errors.APIError as e:
-            # Check if it's a rate limit error (429)
-            if "429" in str(e) or getattr(e, 'code', None) == 429 or getattr(e, 'status', None) == 429:
+            error_str = str(e)
+            error_code = getattr(e, 'code', None) or getattr(e, 'status', None)
+            is_rate_limit = "429" in error_str or "exhausted" in error_str.lower() or error_code == 429
+            is_not_found = "404" in error_str or "NOT_FOUND" in error_str or error_code == 404
+            if is_rate_limit:
                 last_error = e
                 st.toast(f"⚠️ {model_name} rate-limited — trying next model...", icon="🔄")
                 continue
-            # If it's a different API error (e.g. invalid model), raise it immediately
+            elif is_not_found:
+                last_error = e
+                st.toast(f"⚠️ {model_name} not available — trying next model...", icon="🔄")
+                continue
+            # Any other API error (auth, bad request, etc.) — fail fast
             raise e
 
     # All models exhausted

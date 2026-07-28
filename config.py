@@ -2,13 +2,13 @@
 # ATS Resume Optimizer — Configuration
 # ──────────────────────────────────────────────
 
-# Model fallback chain — tried in order when rate-limited (429)
-# Primary: best quality, lowest free-tier RPD (~20/day)
-# Fallbacks: slightly lower quality, higher RPD limits
+# Model fallback chain — tried in order when rate-limited (429) or unavailable (404)
+# Primary: Gemma 4 31B — open-weights, instruction-tuned
+# Fallbacks: Gemini 3.x flash series
 GEMINI_MODELS = [
-    "gemini-2.0-flash",        # Primary — best quality
-    "gemini-1.5-flash",        # Fallback 1 — still strong
-    "gemini-1.5-flash-8b",     # Fallback 2 — lighter but high RPD
+    "gemma-4-31b-it",          # Primary — Gemma 4 31B instruction-tuned
+    "gemini-3.5-flash",        # Fallback 1 — Gemini 3.5 Flash
+    "gemini-3.5-flash-lite",   # Fallback 2 — lighter, higher RPD
 ]
 
 TEMPERATURE = 0.3          # Precise edits, not creative writing
