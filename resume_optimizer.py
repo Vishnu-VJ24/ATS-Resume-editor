@@ -10,7 +10,6 @@ import json
 import re
 from google import genai
 from google.genai import types
-from google.api_core.exceptions import ResourceExhausted, TooManyRequests
 import streamlit as st
 from config import GEMINI_MODELS, TEMPERATURE, MAX_OUTPUT_TOKENS
 from base_resume import BASE_RESUME_LATEX
