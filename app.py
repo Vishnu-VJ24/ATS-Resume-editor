@@ -7,6 +7,7 @@
 
 import re
 import streamlit as st
+from google.genai import errors
 from resume_optimizer import optimize_resume
 from latex_compiler import compile_latex
 from config import OWNER_NAME
@@ -211,12 +212,16 @@ if generate and job_description.strip():
         st.error(f"⚠️ Validation Error:\n\n{e}")
         st.info("The AI may have altered protected content. Try again — each run is independent.")
 
-    except ResourceExhausted as e:
-        st.error("🚫 All AI models are rate-limited for today.")
-        st.info(
-            "You've hit the daily free-tier limit on all fallback models. "
-            "Try again tomorrow, or add a paid Gemini API key in Streamlit secrets."
-        )
+    except errors.APIError as e:
+        is_rate_limit = "429" in str(e) or "exhausted" in str(e).lower() or getattr(e, 'code', None) == 429 or getattr(e, 'status', None) == 429
+        if is_rate_limit:
+            st.error("🚫 All AI models are rate-limited for today.")
+            st.info(
+                "You've hit the daily free-tier limit on all fallback models. "
+                "Try again tomorrow, or add a paid Gemini API key in Streamlit secrets."
+            )
+        else:
+            st.error(f"❌ Gemini API Error: {e}")
         with st.expander("🔍 Error details"):
             st.code(str(e))
 

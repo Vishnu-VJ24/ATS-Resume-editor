@@ -6,9 +6,9 @@
 # Primary: best quality, lowest free-tier RPD (~20/day)
 # Fallbacks: slightly lower quality, higher RPD limits
 GEMINI_MODELS = [
-    "gemini-3.5-flash",        # Primary — best quality
-    "gemini-2.5-flash",        # Fallback 1 — still strong
-    "gemini-2.5-flash-lite",   # Fallback 2 — lighter but high RPD
+    "gemini-2.0-flash",        # Primary — best quality
+    "gemini-1.5-flash",        # Fallback 1 — still strong
+    "gemini-1.5-flash-8b",     # Fallback 2 — lighter but high RPD
 ]
 
 TEMPERATURE = 0.3          # Precise edits, not creative writing

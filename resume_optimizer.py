@@ -9,7 +9,7 @@
 import json
 import re
 from google import genai
-from google.genai import types
+from google.genai import types, errors
 import streamlit as st
 from config import GEMINI_MODELS, TEMPERATURE, MAX_OUTPUT_TOKENS
 from base_resume import BASE_RESUME_LATEX
@@ -36,17 +36,19 @@ def _call_with_fallback(generate_fn):
             # Store which model was used (for UI feedback)
             st.session_state["last_model_used"] = model_name
             return response, model_name
-        except (ResourceExhausted, TooManyRequests) as e:
-            last_error = e
-            st.toast(f"⚠️ {model_name} rate-limited — trying next model...", icon="🔄")
-            continue
+        except errors.APIError as e:
+            # Check if it's a rate limit error (429)
+            if "429" in str(e) or getattr(e, 'code', None) == 429 or getattr(e, 'status', None) == 429:
+                last_error = e
+                st.toast(f"⚠️ {model_name} rate-limited — trying next model...", icon="🔄")
+                continue
+            # If it's a different API error (e.g. invalid model), raise it immediately
+            raise e
 
     # All models exhausted
-    raise ResourceExhausted(
-        f"All models rate-limited. Tried: {', '.join(GEMINI_MODELS)}.\n"
-        f"Last error: {last_error}\n"
-        f"Try again tomorrow or upgrade to a paid API tier."
-    )
+    if last_error:
+        raise last_error
+    raise RuntimeError("No models available in configuration.")
 
 
 # ═══════════════════════════════════════════════
