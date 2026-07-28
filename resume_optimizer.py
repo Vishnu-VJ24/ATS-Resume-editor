@@ -20,6 +20,58 @@ def _get_client():
     return genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
 
 
+def _get_response_text(response, context: str = "model") -> str:
+    """
+    Safely extract text from a Gemini API response.
+    Raises ValueError with a clear message if the response is empty,
+    blocked by safety filters, or truncated due to max tokens.
+    """
+    # Check if there are any candidates at all
+    if not response.candidates:
+        raise ValueError(
+            f"{context}: Model returned no candidates. "
+            "This may be due to a safety filter block or an empty prompt."
+        )
+
+    candidate = response.candidates[0]
+
+    # Check finish_reason for non-STOP outcomes
+    finish_reason = getattr(candidate, 'finish_reason', None)
+    finish_reason_str = str(finish_reason) if finish_reason is not None else "UNKNOWN"
+
+    if "MAX_TOKENS" in finish_reason_str:
+        raise ValueError(
+            f"{context}: Response was cut off (MAX_TOKENS reached). "
+            "Try reducing MAX_OUTPUT_TOKENS usage or simplify the prompt."
+        )
+    if "SAFETY" in finish_reason_str or "BLOCKED" in finish_reason_str:
+        raise ValueError(
+            f"{context}: Response was blocked by safety filters (finish_reason={finish_reason_str}). "
+            "Try rephrasing the job description."
+        )
+    if "RECITATION" in finish_reason_str:
+        raise ValueError(
+            f"{context}: Response blocked due to recitation policy (finish_reason={finish_reason_str})."
+        )
+
+    # Try response.text first (convenience accessor)
+    text = response.text
+    if text is not None:
+        return text.strip()
+
+    # Fallback: manually extract from parts
+    parts = getattr(candidate.content, 'parts', None)
+    if parts:
+        extracted = "".join(p.text for p in parts if getattr(p, 'text', None))
+        if extracted:
+            return extracted.strip()
+
+    raise ValueError(
+        f"{context}: Model returned an empty response "
+        f"(finish_reason={finish_reason_str}). Try again."
+    )
+
+
 def _call_with_fallback(generate_fn):
     """
     Try generate_fn(client, model_name) with each model in GEMINI_MODELS until one succeeds.
@@ -107,7 +159,7 @@ def analyze_job_description(job_description: str) -> dict:
         )
 
     response, _model_name = _call_with_fallback(_generate)
-    raw = response.text.strip()
+    raw = _get_response_text(response, context="JD Analysis")
 
     # Strip markdown code fences if present
     raw = re.sub(r"^```(?:json)?\s*", "", raw)
@@ -281,7 +333,7 @@ Now rewrite the resume following the rules above. Return ONLY the complete LaTeX
         )
 
     response, _model_name = _call_with_fallback(_generate)
-    modified_latex = response.text.strip()
+    modified_latex = _get_response_text(response, context="Resume Rewrite")
 
     # ── Post-processing ──────────────────────────
     # Strip markdown code fences if Gemini wraps the output
