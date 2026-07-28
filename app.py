@@ -7,7 +7,6 @@
 
 import re
 import streamlit as st
-from google.api_core.exceptions import ResourceExhausted
 from resume_optimizer import optimize_resume
 from latex_compiler import compile_latex
 from config import OWNER_NAME
