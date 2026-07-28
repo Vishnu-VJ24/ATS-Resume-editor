@@ -271,7 +271,7 @@ Now rewrite the resume following the rules above. Return ONLY the complete LaTeX
                 # but for structured conversations, multi-turn messages can be used as contents as well.
                 # In the google-genai SDK, passing system instructions via system_instruction config
                 # is cleaner and more robust than manual turns.
-                types.Content(role="user", parts=[types.Part.from_text(user_prompt)])
+                types.Content(role="user", parts=[types.Part(text=user_prompt)])
             ],
             config=types.GenerateContentConfig(
                 temperature=TEMPERATURE,
